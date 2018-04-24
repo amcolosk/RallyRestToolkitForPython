@@ -72,3 +72,64 @@
     Added ability to query RecycleBin entries.
     Added basic search method to Rally instance.
 
+1.1.2 - February 2016
+    internal release only
+    minor style mods for Pinger
+    fixed handling of proxy value under some edge conditions
+    exploratory support for Python 3.5
+
+1.2.0 - Oct 2016
+    support for Python 3.5
+    allow instantiation option to bypass use of Pinger
+    changed header to reflect change of company name to CA Technologies
+    added ranking convenience methods
+    modified handling of attribute allowedValues for better create/update performance
+    allow instantiation option to work with only one workspace for better performance for Subscriptions with large number of Workspaces
+    fix addAttachment handling to allow binary files and increase size limit to 50MB.
+
+1.2.1 - Oct 2016
+    Added mention that the six package is required.
+    Fixed context setup for proper handling when a user has no default workspace/project settings.
+    Corrected handling of allowedValues for attributes when the single allowedValue is a boolean value.
+    Added an allowedValues.py example script.
+
+1.2.2 - Nov 2016
+    Allow for disambiguating Project amongst name duplications by means of using fully qualified path.
+    Incorporated suggestion on preserving case name of custom PortfolioItem sub-item.
+    Fixed discrepancy of docs versus code on default pagesize, now is actually 200 everywhere.
+    Fix location of download package in GitHub repo.
+
+1.2.3 - Dec 2016
+    Fixed restapi.py Rally.getAllowedValues method to accommodate custom fields
+    Allow attribute payload for put and post to have a list of pyral.Entity instances
+    as values for an attribute that is of type COLLECTION.
+
+1.2.4 - Mar 2017
+    Fixed handling of projectScopeUp and projectScopeDown keyword arguments in Rally.get operation.
+    Fixed Peristable's __getattr__ method to more properly handle getting the salient item
+    out of a response to a getResourceByOID request when the item retrieved is a PortfolioItem sub-type.
+    Fixed defect in SchemaItemAttribute where self._allowed_values_resolved was not always set.
+    Fixed defect in RallyRestResponse in __repr__ method where on a response that has no qualifying items
+    an attempt is made to get the Results out of the returned response without going through the QueryResult key.
+
+1.3.0 - Apr 2017
+    Introduced automatic multi-threading for Rally.get operation to speed up retrieval of large
+    result sets.  Implemented step two of the Pinger deprecation plan, ping=False is the new default.
+    Increased default page size to 500.  Maximum useful page size limit is 2000 but 1000 seems
+    to be the sweet spot for multithreading requests.
+    Fixed Rally.getAllUsers so that non subscription admin accounts can see the user list.
+    Updated recommendation for version of requests package.
+
+1.3.1 - Apr 2017
+    Adjusted getAllowedValues so that custom fields with an allowedValues endpoint get resolved.
+    Disqualifed a group of standard attributes whose allowedValue is of type COLLECTION when retrieving 
+    allowed values in SchemaItem.complete(). This is primarily relevant only to attributes defined as
+    Drop Down List or Multi Value Drop Down List. 
+    Fixed mechanism of supplying headers dict to Rally instantiation so that the X-RallyIntegration*
+    headers get overwritten with supplied headers (for name, vendor, version) to better identify the 
+    origin of the integration.
+    Updated official name to reference Agile Central in setup.py, mention threads keyword arg in the
+    get method in the the interface.rst file.
+    
+1.3.2 - Aug 2017
+    Allow for initial connection using a workspace name containing chars that need to be urlencoded.

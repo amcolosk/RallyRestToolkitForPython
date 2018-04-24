@@ -11,7 +11,7 @@ RallyRESTAPIError = pyral.context.RallyRESTAPIError
 
 ##################################################################################################
 
-from rally_targets import TRIAL, TRIAL_USER, TRIAL_PSWD
+from rally_targets import AGICEN, AGICEN_USER, AGICEN_PSWD
 from rally_targets import DEFAULT_WORKSPACE, DEFAULT_PROJECT
 
 EXAMPLE_ATTACHMENT_CONTENT = "The quck brown fox eluded the lumbering sloth\n"
@@ -36,7 +36,7 @@ def retrieveAttachment(rally, artifact, attachmentFileName):
 def test_add_attachment():
     """
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     # find a Project with some US artifacts
     # pick one with no attachments
     # create an attachment file (or choose a smallish file with a commonly used suffix)
@@ -56,10 +56,10 @@ def test_add_attachment():
     #for story in response:
     #    print "%s %-48.48s %d" % (story.FormattedID, story.Name, len(story.Attachments))
 
-    candidate_story = "US96"
+    candidate_story = "US1" #  was "US96" in trial
     response = rally.get("UserStory", fetch="FormattedID,Name,Attachments", 
                                    query='FormattedID = "%s"' % candidate_story)
-    print response.resultCount
+  ##print(response.resultCount)
     story = response.next()
     assert len(story.Attachments) == 0
 
@@ -79,8 +79,8 @@ def test_add_attachment():
 def test_get_attachment():
     """
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
-    candidate_story = "US80"
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
+    candidate_story = "US2" # was this in trial -> "US80"
     target = 'FormattedID = "%s"' % candidate_story
     response = rally.get("UserStory", fetch=True, query=target, project=None)
     assert response.resultCount == 1
@@ -108,15 +108,15 @@ def test_add_tcr_attachment():
         Create an attachment
         Attach the Attachment to the TestCaseResult item
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     wksp = rally.getWorkspace()
     assert wksp.Name == DEFAULT_WORKSPACE
 
     response = rally.get('Project', fetch=False, limit=10)
     assert response != None
     assert response.status_code == 200
-    proj = rally.getProject()  # proj.Name == My Project
-    assert proj.Name == 'My Project'
+    proj = rally.getProject()  # proj.Name == Sample Project
+    assert proj.Name == 'Sample Project'
 
     tc_info = { "Workspace"    : wksp.ref,
                 "Project"      : proj.ref,
@@ -124,16 +124,16 @@ def test_add_tcr_attachment():
                 "Type"         : "Functional",
               }
     test_case = rally.create('TestCase', tc_info)
-    assert test_case.oid > 0
+    assert int(test_case.oid) > 0
 
     tcr_info = { "Workspace" : wksp.ref,
                  "TestCase"  : test_case.ref,
-                 "Date"      : "2014-05-17T14:30:28.000Z",
-                 "Build"     : 27,
+                 "Date"      : "2016-05-17T14:30:28.000Z",
+                 "Build"     : 17,
                  "Verdict"   : "Pass"
                }
     tcr = rally.create('TestCaseResult', tcr_info)
-    assert tcr.oid > 0
+    assert int(tcr.oid) > 0
 
     attachment_name = "Addendum.txt"
     att_ok = conjureUpAttachmentFile(attachment_name)
@@ -147,8 +147,8 @@ def test_detach_attachment():
     """
         This is the counterpart test for test_add_attachment
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
-    candidate_story = "US96"
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
+    candidate_story = "US1"   # "US96"
     target = 'FormattedID = "%s"' % candidate_story
 
     response = rally.get("UserStory", fetch=True, query=target, project=None)
@@ -191,8 +191,8 @@ def x_test_replace_attachments():
     #expectedErrMsg = "hostname '%s' non-existent or unreachable" % bogus_server
     #with py.test.raises(RallyRESTAPIError) as excinfo:
     #    rally = Rally(server=bogus_server,
-    #                        user=TRIAL_USER, 
-    #                        password=TRIAL_PSWD)
+    #                        user=AGICEN_USER,
+    #                        password=AGICEN_PSWD)
     #actualErrVerbiage = excinfo.value.args[0]  # becuz Python2.6 deprecates message :-(
     #assert excinfo.value.__class__.__name__ == 'RallyRESTAPIError'
     #assert actualErrVerbiage == expectedErrMsg

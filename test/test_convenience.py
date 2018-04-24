@@ -8,8 +8,8 @@ from pyral import Rally
 
 ##################################################################################################
 
-from rally_targets import TRIAL, TRIAL_USER, TRIAL_PSWD
-from rally_targets import TRIAL_NICKNAME, DEFAULT_WORKSPACE
+from rally_targets import AGICEN, AGICEN_USER, AGICEN_PSWD
+from rally_targets import AGICEN_NICKNAME, DEFAULT_WORKSPACE
 
 ##################################################################################################
 
@@ -19,14 +19,14 @@ def test_getSchemaInfo():
         obtain a Rally instance and call the getSchemaInfo method for the
         default workspace.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     schema_info = rally.getSchemaInfo(rally.getWorkspace())
-    assert type(schema_info) == types.ListType
+    assert type(schema_info) == list
     assert len(schema_info) > 50
     subs_schema = [item for item in schema_info if item['Name'] == 'Subscription']
     assert subs_schema != None
     assert len(subs_schema) == 1
-    assert type(subs_schema) == types.ListType
+    assert type(subs_schema) == list
     assert u'Attributes' in subs_schema[0]
     assert len(subs_schema[0][u'Attributes']) > 15
 
@@ -37,7 +37,7 @@ def test_getWorkspace():
         Rally entity. The fetch specifies a small number of known valid
         attributes on the Rally entity.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     workspace = rally.getWorkspace()
     assert int(workspace.oid) > 10000
     assert len(workspace.Name) > 6
@@ -49,7 +49,7 @@ def test_getProject():
         issue a simple query (no qualifying criteria) for a known valid 
         Rally entity.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD, version="v2.0")
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD, version="v2.0")
     response = rally.get('Project', fetch=False, limit=10)
     assert response.status_code == 200
     assert response.errors   == []
@@ -67,12 +67,12 @@ def test_getUserInfo_query():
         Using a known valid Rally server and known valid access credentials,
         request the information associated with a single username.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
-    qualifiers = rally.getUserInfo(username=TRIAL_USER)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
+    qualifiers = rally.getUserInfo(username=AGICEN_USER)
     assert len(qualifiers) == 1
     user = qualifiers.pop()
-    assert user.Name     == TRIAL_NICKNAME
-    assert user.UserName == TRIAL_USER
+    assert user.Name     == AGICEN_NICKNAME
+    assert user.UserName == AGICEN_USER
     assert user.UserProfile.DefaultWorkspace.Name == DEFAULT_WORKSPACE
     #assert user.Role == 'CONTRIBUTOR'  # or this may be set to ORGANIZER
     #assert user.Role == 'Developer'  # not set for yeti@rallydev.com on the trial instance...
@@ -86,22 +86,10 @@ def test_getAllUsers_query():
         Using a known valid Rally server and known valid access credentials,
         request information about every user associated with the current subscription.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     everybody = rally.getAllUsers()
     assert len(everybody) > 0
-    assert len([user for user in everybody if user.DisplayName == 'Integrations Test']) == 1
-
-def test_getAllowedValues_query():
-    """
-        Using a known valid Rally server and known valid access credentials,
-        request allowed value information for the State field of the Defect entity.
-    """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
-    avs = rally.getAllowedValues('Defect', 'State')
-    assert len(avs) > 0
-    assert len(avs) == 6
-    assert u'Open' in avs
-    assert u'Closed' in avs
+    assert len([user for user in everybody if user.DisplayName == 'da Kipster']) == 1
 
 def test_typedef():
     """
@@ -109,7 +97,7 @@ def test_typedef():
         exercise the Rally.typedef convenience method using 'Portfolio/Feature' 
         as a target.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     target_type = 'PortfolioItem/Feature'
     td = rally.typedef(target_type)
     assert td != None
@@ -120,11 +108,11 @@ def test_typedef():
 def test_getStates():
     """
         Using a known valid Rally server and known valid access credentials,
-        get all the State entity instances for Thme via the
+        get all the State entity instances for Initiative via the
         Rally.getStates convenience method.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
-    target_entity = 'Theme'
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
+    target_entity = 'Initiative'
     states = rally.getStates(target_entity)
     assert len(states) == 4
     discovering = [state.Name for state in states if state.Name == "Discovering"]
@@ -137,15 +125,20 @@ def test_getCollection():
         url using the workspace.ObjectID.
         Call the rally.getCollection with the confabulated collection url.
     """
-    rally = Rally(server=TRIAL, user=TRIAL_USER, password=TRIAL_PSWD)
+    rally = Rally(server=AGICEN, user=AGICEN_USER, password=AGICEN_PSWD)
     workspace = rally.getWorkspace()
     assert workspace is not None
-    proj_collection_url = "http://%s/slm/webservice/v2.0/Workspace/%s/Projects" % (TRIAL, workspace.ObjectID)
+    proj_collection_url = "http://%s/slm/webservice/v2.0/Workspace/%s/Projects" % (AGICEN, workspace.ObjectID)
     response = rally.getCollection(proj_collection_url)
     assert response.__class__.__name__ == 'RallyRESTResponse'
     projects = [proj for proj in response]
-    assert len(projects) > 30
+    assert len(projects) >= 2
     assert projects.pop(0).__class__.__name__ == 'Project'
+    for project in projects:
+        print(project.details())
+        print('')
+        print('--------------------------------------------------------')
+        print('')
     
 
 #test_getSchemaInfo()
@@ -153,7 +146,6 @@ def test_getCollection():
 #test_getProject()
 #test_getUserInfo_query()
 #test_getAllUsers_query()
-#test_getAllowedValues_query()
 #test_typedef
 #test_getStates
 #test_getCollection

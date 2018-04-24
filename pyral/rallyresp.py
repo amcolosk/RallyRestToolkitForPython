@@ -1,4 +1,3 @@
-
 ###################################################################################################
 #
 #  pyral.response - defines a class to hold the response info from a Rally REST operation
@@ -10,17 +9,20 @@
 #
 ###################################################################################################
 
-__version__ = (1, 1, 1)
+__version__ = (1, 4, 1)
 
 import sys
 import re
-from exceptions import StopIteration
 import json
+import copy
+import time
 from pprint import pprint
 
-from .hydrate import EntityHydrator
+from .hydrate    import EntityHydrator
+from .cargotruck import CargoTruck
 
-__all__ = ['RallyRESTResponse', 'ErrorResponse', 'RallyResponseError']
+__all__ = ['RallyRESTResponse', 'ErrorResponse', 'RallyResponseError',
+           'AgileCentralRESTResponse', 'AgileCentralResponseError']
 
 ##################################################################################################
 
@@ -29,6 +31,7 @@ errout = sys.stderr.write
 ##################################################################################################
 
 class RallyResponseError(Exception): pass
+AgileCentralResponseError = RallyResponseError
    
 class ErrorResponse(object):
 
@@ -60,7 +63,7 @@ class RallyRESTResponse(object):
         returned by the request (for GET).
     """
 
-    def __init__(self, session, context, request, response, hydration, limit):
+    def __init__(self, session, context, request, response, hydration, limit, **kwargs):
         """
             A wrapper for the response received back from the REST API.
             The response has status_code, headers and content attributes which will be preserved.
@@ -71,11 +74,13 @@ class RallyRESTResponse(object):
         self.session  = session
         self.context  = context
         self.resource = request
+        self.threads  = kwargs['threads'] if 'threads' in kwargs else 0
+        self.debug    = kwargs['debug']   if 'debug'   in kwargs else False
         self.data     = None
         request_path_elements = request.split('?')[0].split('/')
 ##
-##        print "RRR.init request: =  %s " % request
-##        print "RRR.init request_path_elements =  %s " % repr(request_path_elements)
+##        print("RRR.init request: =  %s " % request)
+##        print("RRR.init request_path_elements =  %s " % repr(request_path_elements))
 ##
         self.target = request_path_elements[-1]
         if re.match('^\d+$', self.target):
@@ -83,13 +88,14 @@ class RallyRESTResponse(object):
             if self.target.lower() == 'revisionhistory':
                 self.target = 'RevisionHistory'
 
+        self._served  = -1
         self.errors   = []
         self.warnings = []
         self._item_type  = self.target
 ##
-##        print "+" * 85
-##        print "resource: ", self.resource
-##        print "response is a %s" % type(response)  
+##        print("+" * 85)
+##        print("resource: ", self.resource)
+##        print("response is a %s" % type(response))
 ##        # with attributes of status_code, content, data
 ##        # The content is a string that needs to be turned into a json object
 ##        # the json dict should have a key named 'QueryResult' or 'CreateResult' or 
@@ -98,14 +104,14 @@ class RallyRESTResponse(object):
         self.status_code = response.status_code
         self.headers     = response.headers
 ##
-##        print "RallyRESTResponse.status_code is %s" % self.status_code
-##        print "RallyRESTResponse.headers: %s" % repr(self.headers)
+##        print("RallyRESTResponse.status_code is %s" % self.status_code)
+##        print("RallyRESTResponse.headers: %s" % repr(self.headers))
 ##        # response has these keys: url, status_code, headers, raw, _content, encoding, reason, elapsed, history, connection
 ##
 ##        if self.status_code == 405:
-##            print "RallyRESTResponse.status_code is %s" % self.status_code
-##            print response.content
-##            print "x" * 80
+##            print("RallyRESTResponse.status_code is %s" % self.status_code)
+##            print(response.content)
+##            print("x" * 80)
 ##
         if isinstance(response, ErrorResponse):
             if 'OperationResult' in response.content:
@@ -114,13 +120,17 @@ class RallyRESTResponse(object):
             return
 
         self._stdFormat  = True
-        self.content     = json.loads(response.content)
+        try:
+            self.content = response.json()
+        except:
+            problem = "Response for request: {0} either was not JSON content or was an invalidly formed/incomplete JSON structure".format(self.resource)
+            raise RallyResponseError(problem)
 ##
-##        print "response content: %s" % self.content
+##        print("response content: %s" % self.content)
 ##
         self.request_type, self.data = self._determineRequestResponseType(request)
 ##
-##        print "RallyRESTResponse request_type: %s for %s" % (self.request_type, self._item_type)
+##        print("RallyRESTResponse request_type: %s for %s" % (self.request_type, self._item_type))
 ##
 
         if self.request_type == 'ImpliedQuery':
@@ -131,53 +141,79 @@ class RallyRESTResponse(object):
             if target.endswith('.x'):
                 target = target[:-2]
 ##
-##            print "ImpliedQuery presumed target: |%s|" % target
-##            print ""
+##            print("ImpliedQuery presumed target: |%s|" % target)
+##            print("")
 ##
-            if target not in self.content.keys():
+            if target not in list(self.content.keys()):
                 # check to see if there is a case-insensitive match before upchucking...
-                ckls = [k.lower() for k in self.content.keys()]
+                ckls = [k.lower() for k in list(self.content.keys())]
                 if target.lower() not in ckls:
                     forensic_info = "%s\n%s\n" % (response.status_code, response.content)
                     problem = 'missing _Xx_Result specifier for target %s in following:' % target
                     raise RallyResponseError('%s\n%s' % (problem, forensic_info))
                 else:
                     matching_item_ix = ckls.index(target.lower())
-                    target = self.content.keys()[matching_item_ix]
+                    target = list(self.content.keys())[matching_item_ix]
                     self.target = target
             self._stdFormat = False
             # fudge in the QueryResult.Results.<target> dict keychain
             self._item_type = target
-            self.data = {u'QueryResult': {u'Results' : { target: self.content[target] }}}
-            self.data[u'Errors']   = self.content[target]['Errors']
-            self.data[u'Warnings'] = self.content[target]['Warnings']
+            self.data = {'QueryResult': {'Results' : { target: self.content[target] }}}
+            self.data['Errors']   = self.content[target]['Errors']
+            self.data['Warnings'] = self.content[target]['Warnings']
             del self.content[target]['Errors']    # we just snagged this and repositioned it
             del self.content[target]['Warnings']  # ditto
-            self.data[u'PageSize'] = 1
-            self.data[u'TotalResultCount'] = 1
+            self.data['PageSize'] = 1
+            self.data['TotalResultCount'] = 1
 
         qr = self.data
-        self.errors      =     qr[u'Errors']
-        self.warnings    =     qr[u'Warnings']
-        self.startIndex  = int(qr[u'StartIndex'])       if u'StartIndex'       in qr else 0
-        self.pageSize    = int(qr[u'PageSize'])         if u'PageSize'         in qr else 0
-        self.resultCount = int(qr[u'TotalResultCount']) if u'TotalResultCount' in qr else 0
-        self._limit      = limit if limit > 0 else self.resultCount
+        self.errors      =     qr['Errors']
+        self.warnings    =     qr['Warnings']
+        self.startIndex  = int(qr['StartIndex'])       if 'StartIndex'       in qr else 0
+        self.pageSize    = int(qr['PageSize'])         if 'PageSize'         in qr else 0
+        self.resultCount = int(qr['TotalResultCount']) if 'TotalResultCount' in qr else 0
+        self._limit = self.resultCount
+        if limit:
+            self._limit = min(limit, self.resultCount)
         self._page = []
+        if self.request_type in ['Query', 'ImpliedQuery']:
+            self.first_page = True
+        if self.threads <= 0:  # 0 designates auto-threading, the 2 will be auto-adjusted later
+            self.threads = 2
+        self.max_threads = self.threads if self.threads <= 8 else 4  # readjust to sane if too big
 
-        if u'Results' in qr:
-            self._page = qr[u'Results']
+        if 'Results' in qr:
+            self._page = qr['Results']
         else:
-            if u'QueryResult' in qr and u'Results' in qr[u'QueryResult']:
-                self._page = qr[u'QueryResult'][u'Results']
-##
-##        print "initial page has %d items" % len(self._page)
-##
+            if 'QueryResult' in qr and 'Results' in qr['QueryResult']:
+                self._page = qr['QueryResult']['Results']
 
+        # if there is anything in self._page (which would be if the request is some kind of a query)
+        # AND the pageSize is less than the resultCount
+        # we look to see if upping the max_threads would be useful, and if so what is the "right" max_threads value
+        # we up max_threads to 2 if  resultCount >  4*pagesize
+        # we up max_threads to 4 if  resultCount > 10*pagesize
+        # we up max_threads to 8 if  resultCount > 20*pagesize
+        if self.threads > 1:   # readjust to accommodate the resultCount
+            self.max_threads = 1
+            reference_population = min(self._limit, self.resultCount)
+            if self._page and self.resultCount > 1000 and self.pageSize < reference_population:
+                pop_thread_limit = [(  1*self.pageSize,  1),
+                                    (  4*self.pageSize,  2),
+                                    ( 10*self.pageSize,  4),
+                                    ( 20*self.pageSize,  8),
+                                    ( 40*self.pageSize, 10),
+                                   ]
+                for page_size_multiple, num_threads in pop_thread_limit:
+                    if reference_population > page_size_multiple:
+                        self.max_threads = num_threads
+##
+##        print("initial page has %d items" % len(self._page))
+##
         if qr.get('Object', None):
             self._page = qr['Object']['_ref']
 ##
-##        print "%d items in the results starting at index: %d" % (self.resultCount, self.startIndex)
+##        print("%d items in the results starting at index: %d" % (self.resultCount, self.startIndex))
 ##
 
         # for whatever reason, some queries where a start index is unspecified 
@@ -196,32 +232,33 @@ class RallyRESTResponse(object):
             # transform the status code to an error code indicating an Unprocessable Entity if not already an error code
             self.status_code = 422 if self.status_code == 200 else self.status_code
 ##
-##        print "RallyRESTResponse, self.target: |%s|" % self.target
-##        print "RallyRESTResponse._page: %s" % self._page
-##        print "RallyRESTResponse, self.resultCount: |%s|" % self.resultCount
-##        print "RallyRESTResponse, self.startIndex : |%s|" % self.startIndex
-##        print "RallyRESTResponse, self._servable  : |%s|" % self._servable
-##        print ""
+##        print("RallyRESTResponse, self.target     : |%s|" % self.target)
+##        print("RallyRESTResponse, self.startIndex : |%s|" % self.startIndex)
+##        print("RallyRESTResponse, self.resultCount: |%s|" % self.resultCount)
+##        print("RallyRESTResponse, self._servable  : |%s|" % self._servable)
+##        print("RallyRESTResponse._page: has %d items" % len(self._page))
+##        #print("RallyRESTResponse._page: %s" % self._page)
+##        print("")
 ##
 
     def _determineRequestResponseType(self, request):
-        if u'OperationResult' in self.content:
-            return 'Operation', self.content[u'OperationResult']
-        if u'QueryResult' in self.content:
-            return 'Query', self.content[u'QueryResult']
-        if u'CreateResult' in self.content:
-            return 'Create', self.content[u'CreateResult']
-        if u'UpdateResult' in self.content:
-            return 'Update', self.content[u'UpdateResult']
-        if u'DeleteResult' in self.content:
-            return 'Delete', self.content[u'DeleteResult']
+        if 'OperationResult' in self.content:
+            return 'Operation', self.content['OperationResult']
+        if 'QueryResult' in self.content:
+            return 'Query', self.content['QueryResult']
+        if 'CreateResult' in self.content:
+            return 'Create', self.content['CreateResult']
+        if 'UpdateResult' in self.content:
+            return 'Update', self.content['UpdateResult']
+        if 'DeleteResult' in self.content:
+            return 'Delete', self.content['DeleteResult']
         if '_CreatedAt' in self.content and self.content['_CreatedAt'] == 'just now':
             return 'Create', self.content
         else:
 ##
-##            print "????? request type an ImpliedQuery?: %s" % request
-##            print self.content
-##            print "=" * 80
+##            print("????? request type an ImpliedQuery?: %s" % request)
+##            print(self.content)
+##            print("=" * 80)
 ##
             return 'ImpliedQuery', self.content
 
@@ -237,7 +274,7 @@ class RallyRESTResponse(object):
         else:
             return None
 
-    def __nonzero__(self):
+    def __bool__(self):
         """
             This is for evaluating any invalid response as False.
         """
@@ -250,6 +287,9 @@ class RallyRESTResponse(object):
         return self
 
     def next(self):
+        return self.__next__()
+
+    def __next__(self):
         """
             Return a hydrated instance from the self.page until the page is exhausted,
             then issue another session.get(...request...) with startIndex
@@ -257,17 +297,22 @@ class RallyRESTResponse(object):
             that can be manufactured (self._curIndex > self.resultCount)
         """
 ##
-##        print "RallyRestResponse for %s, _stdFormat?: %s, _servable: %d  _limit: %d  _served: %d " % \
-##              (self.target, self._stdFormat, self._servable, self._limit, self._served)
+##        print("RallyRestResponse for %s, _stdFormat?: %s, _servable: %d  _limit: %d  _served: %d " % \
+##              (self.target, self._stdFormat, self._servable, self._limit, self._served))
 ##
         if (self._served >= self._servable) or (self._limit and self._served >= self._limit):
             raise StopIteration
 
         if self._stdFormat:
 ## 
-##            print "RallyRESTResponse.next, _stdFormat detected"
+##            print("RallyRESTResponse.next, _stdFormat detected")
 ##
-            if self._curIndex == self.pageSize:
+            if self._curIndex+1 < len(self._page):  # possible when multi-threads return multiple pages
+                pass
+            elif self.max_threads > 1 and self._curIndex == len(self._page):  # exhausted current "chapter" ?
+                self._page[:]  = self.__retrieveNextPage()
+                self._curIndex = 0
+            elif self._curIndex == self.pageSize:   # in single threaded mode, the page is exhausted
                 self._page[:]  = self.__retrieveNextPage()
                 self._curIndex = 0
             if not self._page:
@@ -303,46 +348,76 @@ class RallyRESTResponse(object):
         else:  # the Response had a non-std format
 ##
 ##            blurb = "item from page is a %s, but Response was not in std-format" % self._item_type
-##            print "RallyRESTResponse.next: %s" % blurb
+##            print("RallyRESTResponse.next: %s" % blurb)
 ##
             #
             # have to stuff the item type into the item dict like it is for the _stdFormat responses
             #
             item = self._page[self._item_type]
-            item_type_key = u'_type'
+            item_type_key = '_type'
             if item_type_key not in item:
-                item[item_type_key] = unicode(self._item_type) 
+                item[item_type_key] = str(self._item_type) 
 
-        del item[u'_rallyAPIMajor']
-        del item[u'_rallyAPIMinor']
-##
-##        print " next item served is a %s" % self._item_type
-##        print "RallyRESTResponse.next, item before call to to hydrator.hydrateInstance"
-##        for key in sorted(item.keys()):
-##            print "    %20.20s: %s" % (key, item[key])
-##        print "+ " * 30
-##
+        del item['_rallyAPIMajor']
+        del item['_rallyAPIMinor']
+
+        if self.debug:
+            self.showNextItem(item)
+
         entityInstance = self.hydrator.hydrateInstance(item)
         self._curIndex += 1
         self._served   += 1
 ##
-##        print " next item served is a %s" % entityInstance._type
+##        print(" next item served is a %s" % entityInstance._type)
 ##
         return entityInstance
+
+    def showNextItem(self, item):
+        print(" next item served is a %s" % self._item_type)
+        print("RallyRESTResponse.next, item before call to to hydrator.hydrateInstance")
+        all_item_keys = sorted(item.keys())
+        underscore_prefix_keys = [key for key in all_item_keys if key[0] == u'_']
+        std_underscore_prefix_keys = ['_type', '_ref', '_refObjectUUID', '_CreatedAt', '_objectVersion']
+        for _key in std_underscore_prefix_keys:
+            try: 
+                print("    %20.20s: %s" % (_key, item[_key])) 
+            except: 
+                pass
+        other_prefix_keys = [key for key in underscore_prefix_keys if key not in std_underscore_prefix_keys]
+        for _key in other_prefix_keys:
+            print("    %20.20s: %s" % (_key, item[_key]))
+        print("")
+        regular_keys = [key for key in all_item_keys if key[0] !='_']
+        std_regular_keys = ['ObjectID', 'ObjectUUID', 'CreationDate']
+        for key in std_regular_keys:
+            try: 
+                print("    %20.20s: %s" % (key, item[key]))
+            except: 
+                pass
+        other_regular_keys = [key for key in regular_keys if key not in std_regular_keys]
+        for key in other_regular_keys:
+            print("    %20.20s: %s" % (key, item[key]))
+        print("+ " * 30)
 
         
     def __retrieveNextPage(self):
         """
-            Issue another session GET request after changing the start index to get the next page.
+            If multi-threading is to be used (self.max_threads > 1) then
+            call the method to retrieve multiple pages, otherwise
+            just call the self.session.get method for the next page (after adjusting the self.startIndex)
         """
+        if self.max_threads > 1:
+            chapter = self.__retrievePages()
+            return chapter
+
         self.startIndex += self.pageSize
         nextPageUrl = re.sub('&start=\d+', '&start=%s' % self.startIndex, self.resource)
         if not nextPageUrl.startswith('http'):
             nextPageUrl = '%s/%s' % (self.context.serviceURL(), nextPageUrl)
 ##
-##        print ""
-##        print "full URL for next page of data:\n    %s" % nextPageUrl
-##        print ""
+##        print("")
+##        print("full URL for next page of data:\n    %s" % nextPageUrl)
+##        print("")
 ##
         try:
             response = self.session.get(nextPageUrl)
@@ -353,30 +428,82 @@ class RallyRESTResponse(object):
             sys.exit(9)
             return []
 
-        content = json.loads(response.content)
-        return content[u'QueryResult'][u'Results']
+        content = response.json()
+        return content['QueryResult']['Results']
+
+    def __retrievePages(self):
+        """
+            Use self._served, self._servable, self.resource, self.max_threads, self.pageSize 
+            and self.startIndex to come up with suitable thread count to grab the 
+            next group of pages from AgileCentral.
+            There will be a thread per page still to be retrieved (including the ending partial page)
+            up to self.max_threads.
+            For the number of threads that will actually be used, populate a page_urls list
+            with the url that thread will use to obtain a page worth of data (adjusts the
+            start=<number> in the url).
+            Once the page_urls list is constructed, delegate off to a an instance of a class
+            that will run the threads that obtain the raw response for the pages and put the 
+            results into a list corresponding to the pages in ascending order.
+        """
+        items_remaining = self._servable - self._served
+        num_threads = self.max_threads
+        max_chunksize = self.pageSize * num_threads
+        if items_remaining - max_chunksize < 0:
+            full, leftovers = divmod(items_remaining, self.pageSize)
+            num_threads = full + (1 if leftovers else 0)
+        stixes = [i+1 for i in range(num_threads)] 
+        page_urls = [re.sub('&start=\d+', '&start=%s' % (self.startIndex + (i * self.pageSize)), self.resource)
+                        for i in stixes]
+
+        success = False
+        exc     = None
+        delays = [0, 2, 5]
+        for delay in delays:
+            time.sleep(delay)
+            cgt = CargoTruck(page_urls, num_threads)
+            try:
+                cgt.load(self.session, 'get', 15)
+                payload = cgt.dump()
+                success = True
+                break
+            except:
+                exc_name, exc_desc = sys.exc_info()[:2]
+                anomaly = "RallyResponse.next.__retrieveNextPage.__retrievePages caught exception " +\
+                          "in threaded request/response activity: %s, %s" % (exc_name, exc_desc)
+                pg1, pg2 = (self.startIndex + self.pageSize), (self.startIndex + (self.pageSize*num_threads))
+                notice = "Retrying the page_urls for the page group startIndexes: %d -> %d" % (pg1, pg2)
+                print(notice)
+
+        if not success:
+            raise RallyResponseError("Unable to retrieve %d chunks of data" % num_threads)
+
+        chapter = []
+        for chunk in payload:
+            chapter.extend(chunk.json()['QueryResult']['Results'])
+
+        self.startIndex += len(chapter)
+        return chapter
 
 
     def __repr__(self):
         if self.status_code == 200 and self._page:
             try:
-                entity_type = self._page[0][u'_type']
+                entity_type = self._page[0]['_type']
                 return "%s result set, totalResultSetSize: %d, startIndex: %s  pageSize: %s  current Index: %s" % \
                    (entity_type, self.resultCount, self.startIndex, self.pageSize, self._curIndex)
             except:
-                return "%s\nErrors: %s\nWarnings: %s\nData: %s\n" % (self.status_code, 
-                                                                     self.errors,
-                                                                     self.warnings,
-                                                                     self._page)
-        else:    
+                info = (self.status_code, self.errors, self.warnings, self._page)
+                return "%s\nErrors: %s\nWarnings: %s\nData: %s\n" % info
+        else:
             if self.errors:
                 blurb = self.errors[0]
             elif self.warnings:
                 blurb = self.warnings[0]
             else:
                 blurb = "%sResult TotalResultCount: %d  Results: %s" % \
-                         (self.request_type, self.resultCount, self.content['Results'])
+                         (self.request_type, self.resultCount, self.content['QueryResult']['Results'])
             return "%s %s" % (self.status_code, blurb)
 
+AgileCentralRESTResponse = RallyRESTResponse
 ##################################################################################################
 

@@ -18,109 +18,6 @@ of the **RallyRESTResponse** class.  Instances of this class allow easy dot ('.'
 access to attributes of the representation of the Rally entity, whether the attribute is a
 simple value or a reference to another Rally entity.
 
-rallySettings
-=============
-
-This function takes into account your environment and arguments provided to this function
-to arrive at and return information necessary to establish a useful *connection* to the 
-Rally server.
-
-The process consists of a priority chain where some reasonable default information is
-established first and then overridden with subsequent steps in the chain (if they exist).
-After following the priority chain, values for server, user, password, workspace, project
-are returned to the caller.
-
-The priority chain consists of these steps:
-    * establish baseline values from values defined in the module containing the rallySettings
-    * override with any environment variables present from this list:
-        - RALLY_SERVER
-        - RALLY_USER
-        - RALLY_PASSWORD
-        - RALLY_WORKSPACE
-        - RALLY_PROJECT
-    * if present, use information from a rally-<version>.cfg file in the current directory,
-      where <version> matches the Rally WSAPI version defined in the pyral.config module.
-      Currently, that version is defined as v2.0.
-    * if present, use the contents of a file named in the RALLY_CONFIG environment variable.
-    * if present, use the contents of a config named on the command line via the --config-<filename>
-      option
-    * if present, use the values of individual credential/target settings provided as command line
-      options via the --<option>=<value>.
-       
-The specific syntax available for these levels is detailed below.
-    
-    **Files**
-
-        The general syntax is:
-            - CAP_NAME  = value
-        Valid entries are:
-            - SERVER    = <RallyServer>
-            - USER      = <validUserName>
-            - PASSWORD  = <validPassword>
-            - WORKSPACE = <validWorkspaceName>
-            - PROJECT   = <validProjectName>
-
-    **Command line options**
-
-         --rallyConfig=<configFileName>
-
-        or --config=<configFileName>
-
-        or --conf=<configFileName>
-
-        or --cfg=<configFileName>
-
-        --rallyServer=<serverName>
-
-        --rallyUser=<validRallyUserName>
-
-        --rallyPassword=<validRallyPassword>
-
-        --workspace=<validWorkspaceName>
-
-        --project=<validProjectName>
-
-This mechanism provides the ability to centrally locate a configuration file that can
-be used by many members of a team where server, workspace, project are common to all members
-and each individual can have their own appropriately secured config file with their credentials.
-Using this mechanism can save tedious and error-prone entry of target information and credentials
-on the command line or having credential information in clear text in unsecured files.
-
-Example use::
-
-    % export RALLY_SERVER="rally1.rallydev.com"
-    % export RALLY_USER="crazedwiley@acmeproducts.com"
-
-    % ls -l current.cfg
-
-      -rw-------  1 wiley  eng  173 Jul 14 07:02 current.cfg
-
-    % cat current.cfg
-
-      USER = wiley@acme.com
-      WORKSPACE = General Products Umbrella
-      PROJECT = Dairy Farm Automation
-
-    % cat basic.py
-    
-    import sys
-    from rally import rallySettings
-
-    options = [opt for opt in sys.argv[1:] if opt.startswith('--')]
-    server, user, password, workspace, project = rallySettings(options)
-    print " ".join(['|%|' % opt for opt in [server, user, password, workspace, project]]
-
-
-    % python basic.py --config=current --rallyPassword='*****' --rallyProject="Livestock Mgmt"
-
-    |rally1.rallydev.com| |wiley@acme.com| |*****| |General Products Umbrella| |Livestock Mgmt|
-
-Note that for convenience purposes a configuration file name may be fully specified 
-or you may elect to not specify the '.cfg' suffix.
-
-Returns a tuple of (server, username, password, workspace, project)
-
-
 rallyWorkset
 ============
 
@@ -143,6 +40,128 @@ The priority chain consists of these steps:
         - RALLY_USER
         - RALLY_PASSWORD
         - APIKEY
+        - RALLY_WORKSPACE
+        - RALLY_PROJECT
+        - RALLY_PING
+    * if present, use information from a rally-<version>.cfg file in the current directory,
+      where <version> matches the Rally WSAPI version defined in the pyral.config module.
+      Currently, that version is defined as v2.0.
+    * if present, use the contents of a file named in the RALLY_CONFIG environment variable.
+    * if present, use the contents of a config named on the command line via the --config-<filename>
+      option
+    * if present, use the values of individual credential/target settings provided as command line
+      options via the --<option>=<value>.
+       
+The specific syntax available for these levels is detailed below.
+    
+    **Files**
+
+        The general syntax is:
+            - CAP_NAME  = value
+        Valid entries are:
+            - SERVER    = <RallyServer>
+            - USER      = <validUserName>
+            - PASSWORD  = <validPassword>
+            - APIKEY    = <validAPIKey>
+            - WORKSPACE = <validWorkspaceName>
+            - PROJECT   = <validProjectName>
+            - RALLY_PING = True | False
+
+    **Command line options**
+
+         --rallyConfig=<configFileName>
+
+        or --config=<configFileName>
+
+        or --conf=<configFileName>
+
+        or --cfg=<configFileName>
+
+        --rallyServer=<serverName>
+
+        --rallyUser=<validRallyUserName>
+
+        --rallyPassword=<validRallyPassword>
+
+        --apikey=<validRallyAPIKeyValue>
+
+        --workspace=<validWorkspaceName>
+
+        --project=<validProjectName>
+     
+        --ping=True|False|true|false|yes|no|1|0
+
+This mechanism provides the ability to centrally locate a configuration file that can
+be used by many members of a team where server, workspace, project are common to all members
+and each individual can have their own appropriately secured config file with their credentials.
+Using this mechanism can save tedious and error-prone entry of target information and credentials
+on the command line or having credential information in clear text in unsecured files.
+
+The use of a Rally API Key value for identification/authentication is new in pyral 1.1.x. 
+If used, you do not need to provide a username / password combination.
+In order to use this, you must first obtain a valid API Key value from the Rally Application
+Manager (API Keys) that you can access from https://rally1.rallydev.com/login.
+Once obtained, you should treat the key with the same level of protection as you would 
+any user/password information; once presented to Rally via the Rally Web Services API, 
+a connection has all the rights associated with the user whose key was presented.
+Consult the Rally help documentation for further information.
+
+Example use::
+
+    % export RALLY_SERVER="rally1.rallydev.com"
+    % export RALLY_USER="crazedwiley@acmeproducts.com"
+
+    % ls -l current.cfg
+
+      -rw-------  1 wiley  eng  173 Jul 14 07:02 current.cfg
+
+    % cat current.cfg
+
+      USER = wiley@acme.com
+      WORKSPACE = General Products Umbrella
+      PROJECT = Dairy Farm Automation
+
+    % cat basic.py
+    
+    import sys
+    from rally import rallyWorkset
+
+    options = [opt for opt in sys.argv[1:] if opt.startswith('--')]
+    server, user, password, apikey, workspace, project = rallyWorkset(options)
+    print " ".join(['|%|' % opt for opt in [server, user, password, apikey, workspace, project]]
+
+
+    % python basic.py --config=current --rallyProject="Livestock Mgmt" --ping=yes
+
+    |rally1.rallydev.com| |wiley@acme.com| |*****| |*****| |General Products Umbrella| |Livestock Mgmt|
+
+Note that for convenience purposes a configuration file name may be fully specified 
+or you may elect to not specify the '.cfg' suffix.
+
+Returns a tuple of (server, username, password, apikey, workspace, project)
+
+
+rallySettings
+=============
+
+This is deprecated as of v1.2.0. The preferred function is **rallyWorkset** which will have
+ongoing support.  The **rallySettings** function will be removed in v2.0.0.
+
+This function takes into account your environment and arguments provided to this function
+to arrive at and return information necessary to establish a useful *connection* to the 
+Rally server.
+
+The process consists of a priority chain where some reasonable default information is
+established first and then overridden with subsequent steps in the chain (if they exist).
+After following the priority chain, values for server, user, password, workspace, project
+are returned to the caller.
+
+The priority chain consists of these steps:
+    * establish baseline values from values defined in the module containing the rallySettings
+    * override with any environment variables present from this list:
+        - RALLY_SERVER
+        - RALLY_USER
+        - RALLY_PASSWORD
         - RALLY_WORKSPACE
         - RALLY_PROJECT
     * if present, use information from a rally-<version>.cfg file in the current directory,
@@ -247,23 +266,51 @@ Rally
     with appropriate and valid target/credential information then provides a means of 
     interacting with the Rally server.
 
-    To instantiate a Rally object, you'll need to provide these arguments:
-        * server
-        * user
-        * password
+To instantiate a Rally object, you'll need to provide these arguments:
+        * **server**    usually rally1.rallydev.com unless you are using an OnPrem version
+        * **user**      AgileCentral UserName
+        * **password**  AgileCentral password for the given user
 
     either in this specific order or as keyword arguments.
 
+    You must either have default **workspace** and **project** values set up for your account
+
+    OR 
+
+    you must provide **workspace** and **project** values that are valid and accessible for your account.
+
     You can optionally specify the following as keyword arguments:
-        * apikey
-        * workspace
-        * project
+        * apikey      (alternate credential specification)
+        * workspace   (name of the AgileCentral workspace)
+        * project     (name of the AgileCentral project)
         * verify_ssl_cert  (True or False, default is True)
         * warn     (True or False, default is True) 
                     Controls whether a warning is issued if no project is specified
                     and the default project for the user is not in the workspace specified.  
                     Under those conditions, the project is changed to the first project
                     (alphabetic ordering) in the list of projects for the specified workspace.
+        * server_ping     (True or False, default in v1.3.0 + is False)
+                   Specifies whether a ping attempt will be made to confirm network connectivity
+                   to the Rally server prior to making a Rally WSAPI REST request.
+                   Organizations may have disabled the ability to make ICMP requests so the ping
+                   attempt may fail even though there is network connectivity to the Rally server.
+                   For this reason, the use of the ping=True option is discouraged going forward.
+                   The ping operation itself will be dropped in the next major release (2.0.0).
+        * isolated_workspace  (True or False, default in v1.2.0 + is False)
+                   Specifies that the Rally instance will only be used for interacting with 
+                   a single workspace (either the user's default workspace or the named workspace).
+                   Using isolated_workspace=True provides performance benefits for a subscription
+                   with many workspaces, but it also means you cannot change the workspace you 
+                   are working within a single instance of a Rally class, nor can you provide
+                   a workspace keyword argument to the get, create, update or delete methods that
+                   differs from the workspace identified at instantiation time.
+                   For subscriptions with a small to moderate number of workspaces (up to a few dozen),
+                   the performance savings will be relatively minor when using isolated_workspace=True
+                   vs. isolated_workspace=False.  However, for subscriptions with a large number of
+                   workspaces, using isolated_workspace=False results in a request to AgileCentral
+                   for each workspace, which can result in a noticeable lag before the instantiation
+                   statement returns a ready-for-use Rally instance.
+        * headers  dict with entries for name, vendor, version of software/integration using this package.
 
     If you use an apikey value, any user name and password you provide is not considered, the connection
     attempt will only use the apikey.
@@ -276,11 +323,17 @@ Rally
         **pyral**, you must have your account added to the whitelist in Rally so that you can use either
         BasicAuth (username and password) or the API Key to authenticate to Rally.
 
-.. py:class:: Rally (server, user=None, password=None, apikey=None, workspace=None, project=None, warn=True)
+.. note::
+
+        As of the 1.2.2 release, **pyral** offers a means of precisely identifying a Project whose name appears in multiple locations within the forest of Projects with a Workspace.  For example, your organization may have several "base" level Projects with sub-trees of Projects.  In this scenario, you might have multiple Projects named 'AgileTeam-X' or 'SalesPrep'.  By using a Project path component separator of '  // ' (<space><slash><slash><space>) you can specify the unambiguous and unique path to the specific Project of interest.  Example:  Omnibus // Metallic // Conductive // Copper // Wire . 
+        You only have to use this syntax to specify a particular Project if you have multiple instances of that Project that have the same name.  There is no provision for supporting the scenario where a Project of the same name exists in the same structural location. 
+
+
+.. py:class:: Rally (server, user=None, password=None, apikey=None, workspace=None, project=None, warn=True, server_ping=False)
 
 Examples::
 
-    rally = Rally('rally1.rallydev.com', 'chester@corral.com', 'bAbYF@cerZ')
+    rally = Rally('rally1.rallydev.com', 'chester@corral.com', 'bAbYF@cerZ', server_ping=True)
 
     rally = Rally(server='rally1.rallydev.com', user='mchunko', password='mySEk^et')
 
@@ -289,6 +342,8 @@ Examples::
     rally = Rally(server, user, password, workspace='Brontoville', verify_ssl_cert=False, warn=False)
 
     rally = Rally(server, apikey="_some-more-numbers", workspace='RockLobster', project='Fence Posts')
+
+    rally = Rally('rally1.rallydev.com', 'chester@corral.com', 'bAbYF@cerZ', headers={'name': 'Fungibles Goods Burn Up/Down', 'vendor': 'Archimedes', 'version': '1.2.3'})
 
 
 
@@ -323,13 +378,14 @@ Core REST methods and CRUD aliases
             - fetch = True/False or "List,Of,Attributes,We,Are,Interested,In"
             - query = 'FieldName = "some value"' or ['EstimatedHours = 10', 'MiddleName != "Shamu"', 'Name contains "foogelhorn pop-tarts"',  etc.]
             - instance = True/False (defaults to False)
-            - pagesize = n  (defaults to 200)
+            - pagesize = n  (defaults to 500)
             - start = n  (defaults to 1)
             - limit = n  (defaults to no limit)
             - workspace = workspace_name (defaults to current workspace selected)
             - project = project_name (defaults to current project selected)
             - projectScopeUp = True/False (defaults to False)
             - projectScopeDown True/False (defaults to False)
+            - threads = n (value of 1 insures single-threading, any other value is advisory)
 
         Returns a RallyRESTResponse object that has errors and warnings attributes that
         should be checked before any further operations on the object are attempted.
@@ -421,7 +477,7 @@ Core REST methods and CRUD aliases
      keyword arguments:
          - projectScopeUp = true/false (defaults to false)
          - projectScopeDown = true/false (defaults to false)
-         - pagesize = n  (defaults to 200)
+         - pagesize = n  (defaults to 500)
          - start = n  (defaults to 1)
          - limit = n  (defaults to no limit)
 
@@ -513,6 +569,9 @@ pyral.Rally instance convenience methods
     This method offers a convenient one-stop means of obtaining usable information 
     about all users in the named workspace.
     If no workspace is specified, then the current context's workspace is used.
+    NOTE: Unless you are using credentials associated with a SubscriptionAdministrator
+    or WorkspaceAdministrator, you will not be able to access a user's UserProfile
+    other than yourself.
 
     Return a list of User instances (fully hydrated for scalar attributes)
     whose ref and collection attributes will be lazy eval'ed upon access.
@@ -524,6 +583,16 @@ pyral.Rally instance convenience methods
     for something like 'Feature' or 'Theme' when creating or updating a
     PortfolioItem subclass.  Intended usage is to use the return *.ref* attribute.
     For example, within an info dict, "PortfolioItemType" : rally.typedef('Feature').ref .
+
+.. method:: getCollection(collection_url)
+
+    Given a collection_url of the form:
+
+       http(s)://<server>(:<port>)/slm/webservice/v2.0/<entity>/OID/<attribute>
+
+    issue a request for the url and return back a list of hydrated instances 
+    for each item in the collection.
+    
 
 .. method:: getState(entityName, stateName)
     
@@ -550,8 +619,23 @@ pyral.Rally instance convenience methods
 
 .. method:: getAllowedValues(entityName, attributeName [,workspace=None])
 
-    Given an entityName and and attributeName (assumed to be valid for the entityName)
+    Given an entityName and and attributeName (which must be valid for the entityName)
     issue a request to obtain a list of allowed values for the attribute.
+    For standard attributes in the set of ('Artifacts', 'Attachments', 'Changesets',
+    'Children', 'Collaborators', 'Defects', 'DefectSuites', 'Discussion', 'Duplicates',
+    'Milestones', 'Iteration', 'Release', 'Project', 'Owner', 'SubmittedBy', 'Predecessors',
+    'Successors', 'Tasks', 'TestCases', 'TestSets', 'Results', 'Steps', 'Tags') this method
+    will return a [True] value if the entity identified by entityName actually has the
+    attributeName specified.  To get the values associated with the attributes in the
+    aforementioned list you should use the **get()** method with the entityName as the first
+    argument and the singular form of the attribute name as the target of the fetch
+    keyword argument.  Of course, this only works with an entity that exists (such as
+    'Attachment' or 'Milestone' or 'Tag') but not entities named above like 'Discussion',
+    or 'SubmittedBy' or 'Result'.
+    For custom fields though there is no such "disqualification", that is the return
+    value will be either a single value or a list of values regardless of whether the
+    values are relevant to every such entity type or the values are a list that can vary
+    per specific instance of the entity type.
 
 .. method:: addAttachment(artifact, filename, mime_type='text/plain')
 
@@ -587,7 +671,60 @@ pyral.Rally instance convenience methods
     Each Attachment record will look like a Rally WSAPI Attachment with
     the additional Content attribute that will contain the decoded AttachmentContent.
 
+.. method:: rankAbove(reference_artifact, target_artifact)
+
+    Rank the target_artifact above the reference_artifact.
+
+.. method:: rankBelow(reference_artifact, target_artifact)
+
+    Rank the target_artifact below the reference_artifact.
+
+.. method:: rankTop(target_artifact)
+
+    Rank the target_artifact at the top of the list of ranked Artifacts 
+    that the target_artifact exists in.
+
+.. method:: rankBottom(target_artifact)
+
+    Rank the target_artifact at the bottom of the list of ranked Artifacts 
+    that the target_artifact exists in.
     
+pyral.Rally experimental convenience methods
+--------------------------------------------
+
+.. method:: addCollectionItems(target_item, collection_items)
+    
+    Given a target_item and a homogenous list of items whose type appears as a One to Many relationship
+    in the target item, add the collection_items to the corresponding attribute in the target_item.
+
+::
+
+       ...
+       milestones = [milestone_1, milestone_2, milestone_3]
+       story = rally.get('story', 'US123') 
+       rally.addCollectionItems(story, milestones)
+
+.. warning:: 
+
+        This method only works when the collection attribute on the target_item is Modifiable.
+        Consult the AgileCentral WSAPI documentation for the target_item attributes to see whether
+        the attribute of interest has a notation of 'Collection Modifiable  yes'.  If there is no 
+        'Colletion Modifiable' notation or the value for that is 'no', then use of this method 
+        should not be attempted.
+        At this time, the AgileCentral WSAPI schema endpoint does not include information about 
+        'Collection Modifiable' for any of the attributes, you'll have to consult the documentation.
+
+.. method:: dropCollectionItems(target_item, collection_items)
+
+    Given a target_item and a homogenous list of items whose type appears as a One to Many relationship
+    in the target item, delete the collection_items to the corresponding attribute in the target_item 
+    from the current collection contents for the target_item.
+
+.. warning:: 
+
+        See note above for the 'addCollectionItems' method.  The restrictions there are also applicable 
+        to this method.
+
 
 RallyRESTResponse
 =================
@@ -649,7 +786,7 @@ Item Attributes
     the standard dot (.) notation.  The names are identical to those documented in the 
     `Rally WS API`_.
 
-.. _Rally WS API: https://rally.rallydev.com/slm/doc/webservice 
+.. _Rally WS API: https://rally1.rallydev.com/slm/doc/webservice 
 
     Generally, every concrete instance in the Rally system will have a Name attribute.
     You can use the **attributes()** method on an instance to obtain the names of all of the 
@@ -697,7 +834,7 @@ Example::
         oid               : 12345678
         ref               : hierarchicalrequirement/12345678
         ObjectID          : 12345678
-        _ref              : https://rallydev.rallydev.com/slm/webservice/1.30/hierarchicalrequirement/12345678.js
+        _ref              : https://rallydev.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement/412345678
         _CreatedAt        : today at 3:14 am
         _hydrated         : True
         Name              : Filbert nuts should be added to all energy bars
@@ -715,16 +852,16 @@ Example::
         Capitalizable     : None
         Changesets        : []
         Children          : []
-        CreationDate      : 2012-07-12T09:14:35.852Z
+        CreationDate      : 2016-07-12T09:14:35.852Z
         DefectStatus      : NONE
         Defects           : []
         Description       : As a health conscious PO, I want better nutritional content in all bars
         Discussion        : []
         IdeaURL           : <pyral.entity.CustomField object at 0x101931290>
         IdeaVotes         : None
-        InProgressDate    : 2012-07-12T09:14:36.098Z
+        InProgressDate    : 2016-07-12T09:14:36.098Z
         Iteration         : Iteration.ref               (OID  1242381  Name Iteration 5 (Summer))
         KanbanState       : Accepted
-        LastUpdateDate    : 2012-07-12T09:14:36.237Z
+        LastUpdateDate    : 2016-07-12T09:14:36.237Z
         ...
     

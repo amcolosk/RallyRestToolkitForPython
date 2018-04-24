@@ -59,7 +59,7 @@ def main(args):
     options = [opt for opt in args if opt.startswith('--')]
     args    = [arg for arg in args if arg not in options]
     if not args:
-        print "You must supply an entity name!"
+        print("You must supply an entity name!")
         sys.exit(1)
 
     query = ""
@@ -72,27 +72,34 @@ def main(args):
     query = 'ElementName = "%s"' % target
 
     server, username, password, apikey, workspace, project = rallyWorkset(options)
+    print(" ".join(["|%s|" % item for item in [server, username, password, apikey, workspace, project]]))
     try:
-        if apikey:
-            rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
-        else:
-            rally = Rally(server, user=username, password=password, workspace=workspace, project=project)
+        rally = Rally(server, username, password, apikey=apikey, workspace=workspace, server_ping=False)
     except Exception as ex:
         errout(str(ex.args[0]))       
         sys.exit(1)
 
-    typedef = rally.typedef(target)
-    showAttributes(typedef.Attributes)
+    sub_name  = rally.subscriptionName()
+    print("Subscription Name: %s" % sub_name)
+    wksp = rally.getWorkspace()
+    print("Workspace Name: %s" % wksp.Name)
+    print("Entity: %s" % target)
+    print("-----------")
+    print("Attributes:")
+    print("-----------")
 
-    print ""
-    print "-" * 64
-    print ""
+    typedef = rally.typedef(target)
+    showAttributes(rally, target, typedef.Attributes)
+
+    print("")
+    print("-" * 64)
+    print("")
     for ix, ancestor in enumerate(typedef.inheritanceChain()):
-        print "%s %s" % (" " * (ix*4), ancestor)
+        print("%s %s" % (" " * (ix*4), ancestor))
 
 #################################################################################################
 
-def showAttributes(attributes):
+def showAttributes(rally, target, attributes):
     required = []
     optional = []
     av_limit = 20
@@ -108,28 +115,22 @@ def showAttributes(attributes):
         rdonly = 'ReadOnly' if attr.ReadOnly else 'Settable'
         custom = 'Custom'   if attr.Custom   else 'Standard'
         hidden = 'Hidden'   if attr.Hidden   else 'Visible'
-        allowedValues = attr.AllowedValues
         tank = required if reqd == 'Required' else optional
-        num_allowed_values = ""
-        if len(allowedValues) > 0:
-           num_allowed_values = ("%d allowed values" % len(allowedValues))
-           if len(allowedValues) == 1:
-               num_allowed_values = num_allowed_values[:-1]
-
         info =  "%-32.32s  %-10.10s  %-16.16s  %-10.10s  %-8.8s  %-8.8s  %-7.7s" % \
                 (name, a_type, s_type, reqd, rdonly, custom, hidden)
         tank.append(info)
-        if num_allowed_values:
-            tank.append("  %s" % num_allowed_values)
 
-        for av in allowedValues[:av_limit]:
-            av_info = "    |%s|" % av.StringValue
-            tank.append(av_info)
-        if len(allowedValues) > av_limit:
-            tank.append("     ...  %d more values not shown" % (len(allowedValues) - av_limit))
+        if attr.AllowedValues:
+            allowed_values = rally.getAllowedValues(target, attr.ElementName)
+            if allowed_values and allowed_values[0] == True:
+                continue
+            for av in allowed_values[:av_limit]:
+                tank.append("     |%s|" % av)
+            if len(allowed_values) > av_limit:
+                tank.append("     ...  %d more values not shown" % (len(allowed_values) - av_limit))
 
     for item in required + optional:
-        print item.encode('utf-8')
+        print(item.encode('utf-8'))
 
 #################################################################################################
 #################################################################################################

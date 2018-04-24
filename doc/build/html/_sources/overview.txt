@@ -68,7 +68,7 @@ In the Rally vernacular, a logical entity is  called a *type*.  Some examples of
 *types* that are usually what a user of **pyral** will be interested in called *artifacts*.
 An *artifact* is either a UserStory, Defect, Task, DefectSuite, TestCase or TestSet.
 The Python toolkit for the Rally REST API (**pyral**) is primarily oriented towards operations with artifacts.
-But, it is not limited to those as it is very possible view/operate on other Rally 
+But, it is not limited to those as it is very possible to view/operate on other Rally 
 entities such as Workspace, Project, UserProfile, Release, Iteration, TestCaseResult, 
 TestFolder, Tag and others.
 
@@ -106,7 +106,7 @@ The second characteristic is that the Rally REST API for some queries and result
 not a scalar value but a reference to yet another entity in the Rally system.  A Project or
 a Release are good examples of these.  Say your query specified the retrieval of some UserStories,
 and you listed the Project as a field to return with these results.  From an end-user perspective,
-seeing the project name as opposed to to an URL with an ObjectID value would be far more intuitive.  
+seeing the project name as opposed to an URL with an ObjectID value would be far more intuitive.
 
 The Python toolkit for the Rally REST API offers this sort of intuitive behavior by "chasing" the URL 
 to obtain the more human friendly and intuitive information for display.  This sort of behavior is 
